@@ -1,0 +1,13 @@
+log/
+data/
+wandb/
+wandb_offline_*/
+nohup*.out
+__pycache__/
+*.pyc
+*.egg-info/
+*.pt
+*.pkl
+*.hdf5
+*.npz
+seed_search_results/
