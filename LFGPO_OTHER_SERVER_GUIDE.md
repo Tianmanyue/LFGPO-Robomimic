@@ -183,6 +183,80 @@ clearly diverges.
 
 ---
 
+## 9. 🚀 Experiment Queue — sbatch-ready command list
+
+Full sweep = **3 flow pretrains + 4 methods × 3 tasks × 3 seeds (=36) finetunes**. Every finetune
+run is one `python script/run.py ...`; wrap each in one sbatch job (template at the bottom).
+Env prep once per node: `conda activate reinflow_robomimic && cd <repo> && source set_env.sh`.
+
+### Step A — flow BC pretrain (RUN FIRST; ~30–60 min each; no seed/GPU-render needed)
+```bash
+python script/run.py --config-dir=cfg/robomimic/pretrain/transport --config-name=pre_reflow_mlp device=cuda:0 wandb=null
+python script/run.py --config-dir=cfg/robomimic/pretrain/can       --config-name=pre_reflow_mlp device=cuda:0 wandb=null
+python script/run.py --config-dir=cfg/robomimic/pretrain/square    --config-name=pre_reflow_mlp device=cuda:0 wandb=null
+```
+Each saves to `${REINFLOW_LOG_DIR}/robomimic/pretrain/<env>_pre_reflow_mlp_ta*_td100/<TIMESTAMP>_42/checkpoint/state_50.pt`.
+**Then set `base_policy_path` to that exact path in the flow finetune configs** (replace the
+`PRETRAINED_42` placeholder): `finetune/{can,square,transport}/ft_lfgpo_flow_mlp.yaml` AND
+`finetune/{can,square,transport}/ft_ppo_reflow_mlp.yaml`. (transport's two configs point at a
+fixed old path — repoint them too.) The flow finetune runs (B4, B5) DEPEND on this.
+
+### Step B — finetune sweep (each line × seed ∈ {42,43,44}; add `seed=<S>`)
+Common flags: `device=cuda:0 +sim_device=cuda:0 wandb=null` (`+sim_device` enables EGL; drop it → osmesa 3× slower).
+
+**B1 · LFGPO-Diffusion (ours):**
+```bash
+python script/run.py --config-dir=cfg/robomimic/finetune/can       --config-name=ft_lfgpo_diffusion_mlp   device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+python script/run.py --config-dir=cfg/robomimic/finetune/square    --config-name=ft_lfgpo_diffusion_mlp   device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+python script/run.py --config-dir=cfg/robomimic/finetune/transport --config-name=ft_lfgpo_diffusion_mlp   device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+```
+**B2 · DPPO diffusion baseline** (add `_target_` override — DPPO config's is stale):
+```bash
+python script/run.py --config-dir=cfg/robomimic/finetune/can       --config-name=ft_ppo_diffusion_mlp _target_=agent.finetune.dppo.train_ppo_diffusion_agent.TrainPPODiffusionAgent device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+python script/run.py --config-dir=cfg/robomimic/finetune/square    --config-name=ft_ppo_diffusion_mlp _target_=agent.finetune.dppo.train_ppo_diffusion_agent.TrainPPODiffusionAgent device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+python script/run.py --config-dir=cfg/robomimic/finetune/transport --config-name=ft_ppo_diffusion_mlp _target_=agent.finetune.dppo.train_ppo_diffusion_agent.TrainPPODiffusionAgent device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+```
+(diffusion base ckpts auto-download; no pretrain needed for B1/B2.)
+
+**B4 · LFGPO-Flow (ours; needs Step A ckpt):**
+```bash
+python script/run.py --config-dir=cfg/robomimic/finetune/can       --config-name=ft_lfgpo_flow_mlp device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+python script/run.py --config-dir=cfg/robomimic/finetune/square    --config-name=ft_lfgpo_flow_mlp device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+python script/run.py --config-dir=cfg/robomimic/finetune/transport --config-name=ft_lfgpo_flow_mlp device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+```
+**B5 · ReinFlow flow baseline (needs Step A ckpt):**
+```bash
+python script/run.py --config-dir=cfg/robomimic/finetune/can       --config-name=ft_ppo_reflow_mlp device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+python script/run.py --config-dir=cfg/robomimic/finetune/square    --config-name=ft_ppo_reflow_mlp device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+python script/run.py --config-dir=cfg/robomimic/finetune/transport --config-name=ft_ppo_reflow_mlp device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
+```
+
+### Priority / ordering
+- **Time-boxed?** Do **seed=42 only first** (all 12 runs) to get the main comparison curves; add 43/44 later.
+- Flow (B4/B5) blocked until Step A pretrain + base_policy_path update. Diffusion (B1/B2) can start immediately.
+- Flagship = **can** (diffusion+flow) — queue those first.
+- ⚠️ **GRPO flow is slow** (~275 s/itr @ n_envs=10; transport worst). Watch wall-clock; if needed lower `model.num_grpo_samples` (16→8) or `train.n_steps`.
+
+### sbatch template (one job per run)
+```bash
+#!/bin/bash
+#SBATCH --job-name=lfgpo
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=16      # 50 envs are CPU-heavy; give enough cores
+#SBATCH --time=24:00:00
+#SBATCH --output=slurm_%x_%j.out
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate reinflow_robomimic
+cd /path/to/LFGPO-Robomimic
+source set_env.sh
+srun python script/run.py <the exact args from B1/B2/B4/B5 above, with this run's device=cuda:0 +sim_device=cuda:0 seed=$SEED>
+```
+
+### Results → curves
+Each run writes eval success-rate to wandb (if entity set) AND a local `.pkl` under its logdir
+(recover with `util/pkl2wandb.py`). Plot success-rate vs env-step per task, overlaying the 4 methods
+(reuse ReinFlow plotting in `xiao/lfgpo/scripts/plot_*` or ReinFlow's own).
+
 ## 8. Report back to human
 After §3+§4 pass (and §6 pretraining for can/square): report (a) that flow checkpoint loads +
 end-to-end runs, (b) BC pretrain loss/eval for can/square + comparison to transport state_50,
