@@ -185,6 +185,21 @@ clearly diverges.
 
 ## 9. 🚀 Experiment Queue — sbatch-ready command list
 
+### 🔑 Checkpoints — how each is obtained (READ FIRST)
+- **Diffusion methods (LFGPO-Diffusion + DPPO baseline)** → BC checkpoints + normalization
+  **auto-download** from Google Drive via `script/run.py` (uses `script/download_url.py` + gdown) on
+  the FIRST run of each task. **All 3 tasks use DPPO-original `state_8000`** (can/square/transport,
+  consistent). No manual download — just run; needs internet. (`state_8000` = the stronger BC ckpt;
+  we switched can from `state_5000` because it plateaued.)
+- **Flow methods (LFGPO-Flow + ReinFlow baseline)** → state reflow ckpts are NOT released, so you
+  **pretrain them yourself** (Step A below, ~5–60 min each), then point `base_policy_path` at the
+  result. Both flow finetune configs of a task share that one pretrained ckpt.
+- **Normalization** (`normalization.npz`) auto-downloads with the diffusion path too; flow reuses it.
+
+**End-to-end flow for the other agent:** clone → §1 env (mujoco 3.1.6!) → `source set_env.sh` →
+run Step A flow pretrains → set base_policy_path → sbatch Step B (diffusion needs no pretrain,
+ckpts auto-download). Everything below is copy-paste.
+
 Full sweep = **3 flow pretrains + 4 methods × 3 tasks × 3 seeds (=36) finetunes**. Every finetune
 run is one `python script/run.py ...`; wrap each in one sbatch job (template at the bottom).
 Env prep once per node: `conda activate reinflow_robomimic && cd <repo> && source set_env.sh`.
