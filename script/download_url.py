@@ -527,6 +527,12 @@ def get_checkpoint_download_url(cfg):
     ):
         return "https://drive.google.com/file/d/1L1ZLD1u1Y1YJmRLGzScXbQ02wGS-_cWo/view?usp=drive_link"
     elif (
+        "can_pre_diffusion_mlp_ta4_td20/2024-06-28_13-29-54/checkpoint/state_8000.pt"
+        in path
+    ):
+        # DPPO-original can ta4 state_8000 (added for consistency with square/transport)
+        return "https://drive.google.com/file/d/1_3-QcDrWCH6cPRPLuVnYQt25ymvBYHgn/view?usp=drive_link"
+    elif (
         "can_pre_diffusion_mlp_img_ta4_td100/2024-07-30_22-23-55/checkpoint/state_5000.pt"
         in path
     ):
