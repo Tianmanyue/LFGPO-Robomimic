@@ -72,7 +72,7 @@ train:
   render:
     freq: 1
     num: 0
-  scale_reward_factor: 0.5   # lfgpo MuJoCo ~0.2-0.5; robomimic sparse -> RETUNE
+  scale_reward_factor: 1   # lfgpo MuJoCo ~0.2-0.5; robomimic sparse -> RETUNE
   critic_tau: 0.005
   policy_tau: 0.005
   buffer_size: 5000

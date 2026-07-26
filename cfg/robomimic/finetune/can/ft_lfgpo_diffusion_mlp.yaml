@@ -71,7 +71,7 @@ train:
     freq: 1
     num: 0
   # --- off-policy replay (robomimic-side, from QSM) ---
-  scale_reward_factor: 0.5  # lfgpo MuJoCo used ~0.5; robomimic sparse reward -> RETUNE
+  scale_reward_factor: 1  # lfgpo MuJoCo used ~0.5; robomimic sparse reward -> RETUNE
   critic_tau: 0.005
   policy_tau: 0.005         # Polyak for target policy (a' sampling)
   buffer_size: 5000         # * n_envs
