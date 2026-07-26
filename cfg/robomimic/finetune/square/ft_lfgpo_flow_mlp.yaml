@@ -7,8 +7,7 @@ _target_: agent.finetune.lfgpo.train_lfgpo_flow_agent.TrainLFGPOFlowAgent
 
 name: ${env_name}_lfgpo_flow_mlp_ta${horizon_steps}_td${denoising_steps}
 logdir: ${oc.env:REINFLOW_LOG_DIR}/robomimic/finetune/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-# UPDATE base_policy_path to YOUR pretrained can reflow ckpt (pre_reflow_mlp produces .../<timestamp>_42/checkpoint/state_50.pt)
-base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/robomimic/pretrain/square_pre_reflow_mlp_ta4_td100/PRETRAINED_42/checkpoint/state_50.pt
+base_policy_path: pretrained/flow_bc/square_reflow_state50.pt
 robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
 normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}/normalization.npz
 

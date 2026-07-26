@@ -17,8 +17,7 @@ hydra:
 _target_: agent.finetune.reinflow.train_ppo_flow_agent.TrainPPOFlowAgent
 name: ${env_name}_ft_flow_mlp_ta${horizon_steps}_td${denoising_steps}_tdf${ft_denoising_steps}_seed${seed}
 logdir: ${oc.env:REINFLOW_LOG_DIR}/robomimic/finetune/${env_name}_ft_flow_mlp_ta${horizon_steps}_td${denoising_steps}_tdf${ft_denoising_steps}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-# UPDATE base_policy_path to YOUR pretrained can reflow ckpt (same one used by ft_lfgpo_flow_mlp)
-base_policy_path: ${oc.env:REINFLOW_LOG_DIR}/robomimic/pretrain/can_pre_reflow_mlp_ta4_td100/PRETRAINED_42/checkpoint/state_50.pt
+base_policy_path: pretrained/flow_bc/can_reflow_state50.pt
 
 robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
 normalization_path: ${oc.env:REINFLOW_DATA_DIR}/robomimic/${env_name}/normalization.npz
