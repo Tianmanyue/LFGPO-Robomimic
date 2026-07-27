@@ -26,6 +26,12 @@ submit ld_p6_can_a15e5 can train.n_train_itr=151 \
 submit ld_p6_can_reg02 can train.n_train_itr=151 \
   train.actor_lr=1e-5 train.ratio_lr=1e-4 train.scale_reward_factor=2 \
   model.ppo_eps=0.2 model.max_ratio_weight=2 model.ratio_reg_lambda=0.02
+submit ld_p6_can_r75e5 can train.n_train_itr=151 \
+  train.actor_lr=1.25e-5 train.ratio_lr=7.5e-5 train.scale_reward_factor=2 \
+  model.ppo_eps=0.2 model.max_ratio_weight=2 model.ratio_reg_lambda=0.05
+submit ld_p6_can_cap15 can train.n_train_itr=151 \
+  train.actor_lr=1e-5 train.ratio_lr=1e-4 train.scale_reward_factor=2 \
+  model.ppo_eps=0.2 model.max_ratio_weight=1.5 model.ratio_reg_lambda=0.05
 
 # Square: local refinement around s3_a2e5_cap2 (98.0%).
 submit ld_p6_sq_a25e5 square train.n_train_itr=201 \
@@ -34,3 +40,9 @@ submit ld_p6_sq_a25e5 square train.n_train_itr=201 \
 submit ld_p6_sq_clip15 square train.n_train_itr=201 \
   train.actor_lr=2e-5 train.ratio_lr=1e-4 train.scale_reward_factor=2 \
   model.ppo_eps=0.15 model.max_ratio_weight=2 model.ratio_reg_lambda=0.05
+submit ld_p6_sq_a15e5 square train.n_train_itr=201 \
+  train.actor_lr=1.5e-5 train.ratio_lr=1e-4 train.scale_reward_factor=2 \
+  model.ppo_eps=0.2 model.max_ratio_weight=2 model.ratio_reg_lambda=0.05
+submit ld_p6_sq_r75e5 square train.n_train_itr=201 \
+  train.actor_lr=2e-5 train.ratio_lr=7.5e-5 train.scale_reward_factor=2 \
+  model.ppo_eps=0.2 model.max_ratio_weight=2 model.ratio_reg_lambda=0.05
