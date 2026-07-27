@@ -1,18 +1,18 @@
 #!/bin/bash
 
-# Submit one matched experiment on Slurm allocation p32958 with seed 44.
+# Submit one matched experiment on Slurm allocation p32876 with seed 100.
 # Usage:
-#   bash slurm/submit_p32958_seed44.sh <method> <can|square|transport> [Hydra override ...]
+#   bash slurm/submit_p32876_seed100.sh <method> <can|square|transport> [Hydra override ...]
 # Example:
-#   bash slurm/submit_p32958_seed44.sh dppo transport
+#   bash slurm/submit_p32876_seed100.sh lfgpo_diffusion transport train.actor_lr=1e-5
 
 set -euo pipefail
 
 METHOD=${1:?Usage: $0 '<lfgpo_diffusion|dppo|lfgpo_flow|reinflow> <can|square|transport>' [Hydra override ...]}
 ENV_NAME=${2:?Usage: $0 '<lfgpo_diffusion|dppo|lfgpo_flow|reinflow> <can|square|transport>' [Hydra override ...]}
 EXTRA_OVERRIDES=("${@:3}")
-ACCOUNT=p32958
-SEED=44
+ACCOUNT=p32876
+SEED=100
 REPO=${LFGPO_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 
 case "${METHOD}" in

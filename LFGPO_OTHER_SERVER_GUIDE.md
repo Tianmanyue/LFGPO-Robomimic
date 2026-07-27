@@ -167,13 +167,13 @@ For the additional Quest allocations, use the dedicated launchers below. They in
 one experiment at a time so an unfinalized sweep cannot be launched accidentally:
 
 ```bash
-# p32876 always uses seed 43
-bash slurm/submit_p32876_seed43.sh lfgpo_diffusion can train.actor_lr=1e-5
-bash slurm/submit_p32876_seed43.sh dppo can
+# p32876 always uses seed 100
+bash slurm/submit_p32876_seed100.sh lfgpo_diffusion can train.actor_lr=1e-5
+bash slurm/submit_p32876_seed100.sh dppo can
 
-# p32958 always uses seed 44
-bash slurm/submit_p32958_seed44.sh lfgpo_diffusion can train.actor_lr=1e-5
-bash slurm/submit_p32958_seed44.sh dppo can
+# p32958 always uses seed 200
+bash slurm/submit_p32958_seed200.sh lfgpo_diffusion can train.actor_lr=1e-5
+bash slurm/submit_p32958_seed200.sh dppo can
 ```
 
 Export `LFGPO_CONDA_ROOT`, `LFGPO_CONDA_ENV`, and `CKPT_ROOT` for that account before calling a
