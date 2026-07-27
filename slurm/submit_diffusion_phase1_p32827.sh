@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Phase-1 LFGPO-Diffusion tuning sweep.
-# GPU allocation: p32827
+# Default GPU allocation: p32948. Pass another Slurm account as $1 if needed.
 # All logs/checkpoints/results remain under this repository's runtime/ and slurm/logs/.
 
 set -euo pipefail
 
-ACCOUNT=p32827
+ACCOUNT=${1:-p32948}
 SEED=42
 REPO=${LFGPO_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 RUNNER=slurm/run_finetune_seed42.sbatch
