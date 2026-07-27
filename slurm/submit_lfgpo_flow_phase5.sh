@@ -34,6 +34,7 @@ submit lf_can_p5_safe \
   train.n_train_itr=151 train.val_freq=5 train.save_model_freq=5 \
   train.actor_lr=2e-6 train.actor_lr_scheduler.min_lr=1e-6 \
   train.ratio_lr=1e-5 train.scale_reward_factor=1 \
+  +train.policy_update_freq=48 \
   model.num_grpo_samples=32 model.ppo_eps=0.1 \
   model.max_ratio_weight=1.5 model.ratio_reg_lambda=0.1 \
   +model.bc_anchor_coef=0.3
@@ -45,6 +46,7 @@ submit lf_can_p5_balanced \
   train.n_train_itr=151 train.val_freq=5 train.save_model_freq=5 \
   train.actor_lr=5e-6 train.actor_lr_scheduler.min_lr=2e-6 \
   train.ratio_lr=2e-5 train.scale_reward_factor=1 \
+  +train.policy_update_freq=48 \
   model.num_grpo_samples=32 model.ppo_eps=0.1 \
   model.max_ratio_weight=2 model.ratio_reg_lambda=0.05 \
   +model.bc_anchor_coef=0.1

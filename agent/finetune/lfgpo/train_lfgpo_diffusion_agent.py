@@ -76,6 +76,13 @@ class TrainLFGPODiffusionAgent(TrainAgent):
         self.policy_tau = cfg.train.get("policy_tau", self.critic_tau)
         # ratio-net gradient steps per policy step (default 1:1, cf. lfgpo.py delay)
         self.ratio_updates_per_batch = cfg.train.get("ratio_updates_per_batch", 1)
+        # Flow policies are substantially more sensitive to repeated weighted
+        # flow-matching steps than diffusion policies.  Keep the default at 1
+        # for backwards compatibility, but allow sweeps to decouple the critic
+        # update rate from actor/ratio updates.
+        self.policy_update_freq = cfg.train.get("policy_update_freq", 1)
+        if self.policy_update_freq < 1:
+            raise ValueError("train.policy_update_freq must be >= 1")
 
     def run(self):
         # FIFO replay buffer
@@ -180,7 +187,7 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                 terminated_trajs = np.array(deepcopy(terminated_buffer)).reshape(-1)
 
                 loss_actor = loss_critic = loss_ratio = torch.tensor(0.0)
-                for _ in range(num_batch):
+                for batch_idx in range(num_batch):
                     inds = np.random.choice(len(obs_trajs), self.batch_size)
                     obs_b = {"state": torch.from_numpy(obs_trajs[inds]).float().to(self.device)}
                     next_obs_b = {"state": torch.from_numpy(next_obs_trajs[inds]).float().to(self.device)}
@@ -196,26 +203,27 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                     loss_critic.backward()
                     self.critic_optimizer.step()
 
-                    # 2. advantage from (target) twin Q
-                    adv = self.model.compute_advantage(obs_b, actions_b)
+                    if batch_idx % self.policy_update_freq == 0:
+                        # 2. advantage from (target) twin Q
+                        adv = self.model.compute_advantage(obs_b, actions_b)
 
-                    # 3. ratio net (PPO-clip surrogate + double-sample regularizer)
-                    for _ in range(self.ratio_updates_per_batch):
-                        loss_ratio, _ = self.model.loss_ratio(obs_b, actions_b, adv)
-                        self.ratio_optimizer.zero_grad()
-                        loss_ratio.backward()
-                        self.ratio_optimizer.step()
+                        # 3. ratio net (PPO-clip surrogate + regularizer)
+                        for _ in range(self.ratio_updates_per_batch):
+                            loss_ratio, _ = self.model.loss_ratio(obs_b, actions_b, adv)
+                            self.ratio_optimizer.zero_grad()
+                            loss_ratio.backward()
+                            self.ratio_optimizer.step()
 
-                    # 4. policy: ratio-reweighted drift matching (after critic warmup)
-                    loss_actor = self.model.loss_actor(obs_b, actions_b)
-                    self.actor_optimizer.zero_grad()
-                    loss_actor.backward()
-                    if self.itr >= self.n_critic_warmup_itr:
-                        if self.max_grad_norm is not None:
-                            torch.nn.utils.clip_grad_norm_(
-                                self.model.actor.parameters(), self.max_grad_norm
-                            )
-                        self.actor_optimizer.step()
+                        # 4. ratio-reweighted policy matching after critic warmup
+                        loss_actor = self.model.loss_actor(obs_b, actions_b)
+                        self.actor_optimizer.zero_grad()
+                        loss_actor.backward()
+                        if self.itr >= self.n_critic_warmup_itr:
+                            if self.max_grad_norm is not None:
+                                torch.nn.utils.clip_grad_norm_(
+                                    self.model.actor.parameters(), self.max_grad_norm
+                                )
+                            self.actor_optimizer.step()
 
                     # 5. Polyak target updates
                     self.model.update_target_critic(self.critic_tau)
