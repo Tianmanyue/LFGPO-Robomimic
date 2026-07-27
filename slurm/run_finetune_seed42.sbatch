@@ -15,6 +15,7 @@ set -euo pipefail
 METHOD=${1:?Usage: $0 '<lfgpo_diffusion|dppo|lfgpo_flow|reinflow> <can|square|transport>'}
 ENV_NAME=${2:?Usage: $0 '<method> <can|square|transport>'}
 EXTRA_OVERRIDES=("${@:3}")
+SEED=${LFGPO_SEED:-42}
 REPO=${LFGPO_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 CONDA_ROOT=${LFGPO_CONDA_ROOT:-/projects/p32948/anaconda3}
 CONDA_ENV=${LFGPO_CONDA_ENV:-lfgpo_robomimic}
@@ -56,10 +57,10 @@ if [[ "${METHOD}" == "lfgpo_flow" || "${METHOD}" == "reinflow" ]]; then
   fi
 fi
 
-echo "Job ${SLURM_JOB_ID} on $(hostname): ${METHOD} ${ENV_NAME}, seed=42"
+echo "Job ${SLURM_JOB_ID} on $(hostname): ${METHOD} ${ENV_NAME}, seed=${SEED}"
 srun python script/run.py \
   --config-dir="cfg/robomimic/finetune/${ENV_NAME}" \
   --config-name="${CONFIG}" \
   "${EXTRA[@]}" \
-  device=cuda:0 +sim_device=cuda:0 wandb=null seed=42 \
+  device=cuda:0 +sim_device=cuda:0 wandb=null "seed=${SEED}" \
   "${EXTRA_OVERRIDES[@]}"

@@ -161,13 +161,16 @@ Only then submit the full sweep.
 ## 7. Submit the validated seed-42 experiments
 
 ```bash
-bash slurm/submit_seed42.sh diffusion  # 3 LFGPO-Diffusion + 3 DPPO
-bash slurm/submit_seed42.sh flow       # 3 LFGPO-Flow + 3 ReinFlow
+bash slurm/submit_seed42.sh diffusion 42  # 3 LFGPO-Diffusion + 3 DPPO
+bash slurm/submit_seed42.sh flow 42       # 3 LFGPO-Flow + 3 ReinFlow
 ```
 
 The flow command refuses to submit if any required checkpoint is absent. The DPPO wrapper supplies
-the corrected Python `_target_` automatically. All jobs use seed 42; pass `seed=43` or `seed=44`
-as a final Hydra override when launching additional seeds manually.
+the corrected Python `_target_` automatically. The remaining positional arguments are seeds. For a
+matched three-seed comparison use `bash slurm/submit_seed42.sh diffusion 42 43 44` (and likewise
+for `flow` after its selected configuration is validated). Compare methods within each identical
+seed, then report mean, standard deviation, paired differences, and curve AUC; do not cherry-pick
+one method's favorable seed against another method's unfavorable seed.
 
 Monitor:
 
