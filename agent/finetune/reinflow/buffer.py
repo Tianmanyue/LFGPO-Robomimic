@@ -204,11 +204,9 @@ class PPOBuffer:
             if self.furniture_sparse_reward:
                 episode_best_reward = episode_reward
             else:
+                # MultiStep already sums primitive rewards within each action chunk.
                 episode_best_reward = np.array(
-                    [
-                        np.max(reward_traj) / self.act_steps
-                        for reward_traj in reward_trajs_split
-                    ]
+                    [np.max(reward_traj) for reward_traj in reward_trajs_split]
                 )
             self.avg_episode_reward = np.mean(episode_reward)
             self.avg_best_reward = np.mean(episode_best_reward)
@@ -424,10 +422,7 @@ class PPODiffusionBufferGPU(PPODiffusionBuffer):
                 episode_best_reward = episode_reward
             else:
                 episode_best_reward = np.array(
-                    [
-                        np.max(reward_traj) / self.act_steps
-                        for reward_traj in reward_trajs_split
-                    ]
+                    [np.max(reward_traj) for reward_traj in reward_trajs_split]
                 )
             # Compute metrics
             self.avg_episode_reward = np.mean(episode_reward)
@@ -986,10 +981,7 @@ class PPOFlowBufferGPU(PPOFlowBuffer):
                 episode_best_reward = episode_reward
             else:
                 episode_best_reward = np.array(
-                    [
-                        np.max(reward_traj) / self.act_steps
-                        for reward_traj in reward_trajs_split
-                    ]
+                    [np.max(reward_traj) for reward_traj in reward_trajs_split]
                 )
             # Compute metrics
             self.avg_episode_reward = np.mean(episode_reward)
@@ -1376,4 +1368,3 @@ class PPOFlowImgBufferGPU(PPOFlowBufferGPU):
             )
         # compute return
         self.returns_trajs = self.advantages_trajs + self.value_trajs
-

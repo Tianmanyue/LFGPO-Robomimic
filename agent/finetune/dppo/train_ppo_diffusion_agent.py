@@ -196,11 +196,9 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 ):  # only for furniture tasks, where reward only occurs in one env step
                     episode_best_reward = episode_reward
                 else:
+                    # MultiStep already sums primitive rewards within each action chunk.
                     episode_best_reward = np.array(
-                        [
-                            np.max(reward_traj) / self.act_steps
-                            for reward_traj in reward_trajs_split
-                        ]
+                        [np.max(reward_traj) for reward_traj in reward_trajs_split]
                     )
                 avg_episode_reward = np.mean(episode_reward)
                 avg_best_reward = np.mean(episode_best_reward)

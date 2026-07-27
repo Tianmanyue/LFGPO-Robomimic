@@ -156,9 +156,8 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                 ]
                 num_episode_finished = len(reward_trajs_split)
                 episode_reward = np.array([np.sum(r) for r in reward_trajs_split])
-                episode_best_reward = np.array(
-                    [np.max(r) / self.act_steps for r in reward_trajs_split]
-                )
+                # MultiStep already sums primitive rewards within each action chunk.
+                episode_best_reward = np.array([np.max(r) for r in reward_trajs_split])
                 avg_episode_reward = np.mean(episode_reward)
                 avg_best_reward = np.mean(episode_best_reward)
                 success_rate = np.mean(

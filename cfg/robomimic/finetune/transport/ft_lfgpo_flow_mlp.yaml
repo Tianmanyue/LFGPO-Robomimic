@@ -53,12 +53,12 @@ train:
   n_critic_warmup_itr: 5
   n_steps: 400
   gamma: 0.999
-  actor_lr: 1e-4          # flow exp: --lr_flow 1e-4
+  actor_lr: 1e-5          # conservative rate: 240 replay updates per iteration
   actor_weight_decay: 0
   actor_lr_scheduler:
     first_cycle_steps: 1000
     warmup_steps: 10
-    min_lr: 3e-5          # flow exp: --lr_schedule_end 3e-5
+    min_lr: 3e-6
   critic_lr: 3e-4          # flow exp: --q_lr_flow 3e-4
   critic_weight_decay: 0
   critic_lr_scheduler:
@@ -86,7 +86,7 @@ model:
   ppo_eps: 0.2
   max_ratio_weight: 5.0
   ratio_reg_lambda: 0.01
-  num_grpo_samples: 16    # flow exp default (was 32 in some submits; 16 for speed, human OK'd)
+  num_grpo_samples: 32    # larger GRPO group for lower-variance advantages
   grpo_batch_norm_adv: false
   use_target_policy: true
   # --- ReFlow init ---

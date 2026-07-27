@@ -32,13 +32,16 @@ clean_pycache(directory=REINFLOW_DIR)
 
 # register kitchen tasks in advance. prevent env not found error. 
 import gym
-import d4rl.gym_mujoco
+import os
+if os.environ.get("REINFLOW_IMPORT_D4RL") == "1":
+    import d4rl.gym_mujoco
 
 import gc
 gc.collect()
 
-import os
 import sys
+import fcntl
+from contextlib import contextmanager
 import logging
 import math
 import hydra
@@ -59,6 +62,16 @@ os.environ["D4RL_SUPPRESS_IMPORT_ERROR"] = "1"
 
 # add logger
 log = logging.getLogger(__name__)
+
+
+@contextmanager
+def download_lock(target):
+    """Serialize first-run downloads shared by concurrent Slurm jobs."""
+    lock_path = f"{target}.lock"
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        yield
 
 # use line-buffering for both stdout and stderr
 sys.stdout = open(sys.stdout.fileno(), mode="w", buffering=1)
@@ -106,26 +119,24 @@ def main(cfg: OmegaConf):
 
     # For fine-tuning: download normalization if needed
     if "normalization_path" in cfg and not os.path.exists(cfg.normalization_path):
-        download_url = get_normalization_download_url(cfg)
         download_target = cfg.normalization_path
-        dir_name = os.path.dirname(download_target)
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name)
-        log.info(f"Downloading normalization statistics from {download_url} to {download_target}")
-        gdown.download(url=download_url, output=download_target, fuzzy=True)
+        with download_lock(download_target):
+            if not os.path.exists(download_target):
+                download_url = get_normalization_download_url(cfg)
+                log.info(f"Downloading normalization statistics from {download_url} to {download_target}")
+                gdown.download(url=download_url, output=download_target, fuzzy=True)
 
     # For fine-tuning: download checkpoint if needed
     # ReinFlow Authors: specify base_policy_path=null when you wanna resume from an existing fine-tuning checkpoint.
     if "base_policy_path" in cfg and cfg.base_policy_path and (not os.path.exists(cfg.base_policy_path)):
-        download_url = get_checkpoint_download_url(cfg)
-        if download_url is None:
-            raise ValueError(f"Unknown checkpoint path {cfg.base_policy_path}. Did you specify the correct path to the policy you trained?")
         download_target = cfg.base_policy_path
-        dir_name = os.path.dirname(download_target)
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name)
-        log.info(f"Downloading checkpoint from {download_url} to {download_target}")
-        gdown.download(url=download_url, output=download_target, fuzzy=True)
+        with download_lock(download_target):
+            if not os.path.exists(download_target):
+                download_url = get_checkpoint_download_url(cfg)
+                if download_url is None:
+                    raise ValueError(f"Unknown checkpoint path {cfg.base_policy_path}. Did you specify the correct path to the policy you trained?")
+                log.info(f"Downloading checkpoint from {download_url} to {download_target}")
+                gdown.download(url=download_url, output=download_target, fuzzy=True)
 
     # Deal with isaacgym needs to be imported before torch
     if "env" in cfg and "env_type" in cfg.env and cfg.env.env_type == "furniture":

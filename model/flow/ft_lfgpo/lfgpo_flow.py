@@ -49,6 +49,8 @@ class LFGPOFlow(ReFlow):
         ratio_reg_lambda=0.01,
         num_grpo_samples=32,
         grpo_batch_norm_adv=False,
+        advantage_mode="grpo",
+        adv_norm=True,
         adv_eps=1e-4,
         use_target_policy=True,
         sample_t_type="uniform",
@@ -77,6 +79,10 @@ class LFGPOFlow(ReFlow):
         self.ratio_reg_lambda = ratio_reg_lambda
         self.num_grpo_samples = num_grpo_samples
         self.grpo_batch_norm_adv = grpo_batch_norm_adv
+        if advantage_mode not in {"grpo", "ppo"}:
+            raise ValueError(f"Unknown advantage_mode={advantage_mode!r}")
+        self.advantage_mode = advantage_mode
+        self.adv_norm = adv_norm
         self.adv_eps = adv_eps
 
         self.use_target_policy = use_target_policy
@@ -130,6 +136,16 @@ class LFGPOFlow(ReFlow):
     def compute_advantage(self, obs, actions):
         q1, q2 = self.target_q(obs, actions)
         q_sa = torch.min(q1, q2).view(-1)  # (B,)
+
+        if self.advantage_mode == "ppo":
+            # Match LFGPO-Diffusion: estimate V(s) with one independent
+            # target-policy action, then optionally normalize the minibatch.
+            v_action = self.sample_action(obs, use_target=True)
+            vq1, vq2 = self.target_q(obs, v_action)
+            adv = q_sa - torch.min(vq1, vq2).view(-1)
+            if self.adv_norm:
+                adv = (adv - adv.mean()) / (adv.std() + self.adv_eps)
+            return adv
 
         B = actions.shape[0]
         G = self.num_grpo_samples

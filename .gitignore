@@ -174,4 +174,7 @@ dmypy.json
 cfg/robomimic/*.sh
 
 *.out
+slurm/logs/
+MUJOCO_LOG.TXT
+experiment_metrics.csv
 !pretrained/flow_bc/*.pt
