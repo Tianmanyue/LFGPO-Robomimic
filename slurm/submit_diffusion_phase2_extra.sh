@@ -51,18 +51,4 @@ submit ld_sq_s4_rs5_cap2 square \
   train.ratio_lr=1e-4 train.scale_reward_factor=5 \
   model.max_ratio_weight=2 model.ratio_reg_lambda=0.05
 
-# Transport: highly conservative policy drift; diagnostic length only.
-submit ld_tr_t4_cap2 transport \
-  name=transport_lfgpo_diffusion_t4_cap2 \
-  train.n_train_itr=30 train.val_freq=3 train.save_model_freq=3 \
-  train.actor_lr=3e-6 train.ratio_lr=1e-4 \
-  train.n_critic_warmup_itr=10 train.replay_ratio=4 train.scale_reward_factor=2 \
-  model.max_ratio_weight=2 model.ratio_reg_lambda=0.05
-
-submit ld_tr_t5_cap15 transport \
-  name=transport_lfgpo_diffusion_t5_cap15 \
-  train.n_train_itr=30 train.val_freq=3 train.save_model_freq=3 \
-  train.actor_lr=3e-6 train.ratio_lr=3e-5 \
-  train.n_critic_warmup_itr=15 train.replay_ratio=2 train.scale_reward_factor=5 \
-  model.ppo_eps=0.1 model.max_ratio_weight=1.5 model.ratio_reg_lambda=0.1
-
+# Transport candidates intentionally omitted: rebuttal resources focus on Can and Square.
