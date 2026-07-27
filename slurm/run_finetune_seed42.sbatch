@@ -16,7 +16,7 @@ METHOD=${1:?Usage: $0 '<lfgpo_diffusion|dppo|lfgpo_flow|reinflow> <can|square|tr
 ENV_NAME=${2:?Usage: $0 '<method> <can|square|transport>'}
 EXTRA_OVERRIDES=("${@:3}")
 SEED=${LFGPO_SEED:-42}
-REPO=${LFGPO_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
+REPO=${LFGPO_REPO:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CONDA_ROOT=${LFGPO_CONDA_ROOT:-/projects/p32948/anaconda3}
 CONDA_ENV=${LFGPO_CONDA_ENV:-lfgpo_robomimic}
 

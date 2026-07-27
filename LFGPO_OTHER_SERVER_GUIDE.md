@@ -28,7 +28,8 @@ Change `--account`, partition, GPU request, memory, and wall time in the three
 `slurm/*.sbatch` files if the second account uses a different allocation. Do not change the
 Python commands just to adapt paths.
 
-Runtime paths are portable. The scripts derive the repository directory automatically and accept:
+Runtime paths are portable. Inside Slurm, the scripts use `SLURM_SUBMIT_DIR` as the repository
+directory (submit from the repository root) and accept:
 
 ```bash
 export LFGPO_REPO=/absolute/path/to/LFGPO-Robomimic   # optional

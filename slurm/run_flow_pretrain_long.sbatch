@@ -14,7 +14,7 @@ set -euo pipefail
 ENV_NAME=${1:?Usage: $0 '<can|square|transport>'}
 RESUME_CKPT=${2:-pretrained/flow_bc/${ENV_NAME}_reflow_state50.pt}
 EXTRA_EPOCHS=${3:-150}
-REPO=${LFGPO_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
+REPO=${LFGPO_REPO:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CONDA_ROOT=${LFGPO_CONDA_ROOT:-/projects/p32948/anaconda3}
 CONDA_ENV=${LFGPO_CONDA_ENV:-lfgpo_robomimic}
 
