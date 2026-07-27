@@ -161,6 +161,27 @@ Only then submit the full sweep.
 
 ## 7. Submit the validated seed-42 experiments
 
+### Two-account single-job launchers
+
+For the additional Quest allocations, use the dedicated launchers below. They intentionally submit
+one experiment at a time so an unfinalized sweep cannot be launched accidentally:
+
+```bash
+# p32876 always uses seed 43
+bash slurm/submit_p32876_seed43.sh lfgpo_diffusion can train.actor_lr=1e-5
+bash slurm/submit_p32876_seed43.sh dppo can
+
+# p32958 always uses seed 44
+bash slurm/submit_p32958_seed44.sh lfgpo_diffusion can train.actor_lr=1e-5
+bash slurm/submit_p32958_seed44.sh dppo can
+```
+
+Export `LFGPO_CONDA_ROOT`, `LFGPO_CONDA_ENV`, and `CKPT_ROOT` for that account before calling a
+launcher. Always submit LFGPO and its baseline with the same task, checkpoint, budget, and seed.
+Additional Hydra overrides are forwarded unchanged to the common finetune sbatch script.
+
+### Seed-42 suite launcher
+
 ```bash
 bash slurm/submit_seed42.sh diffusion 42  # 3 LFGPO-Diffusion + 3 DPPO
 bash slurm/submit_seed42.sh flow 42       # 3 LFGPO-Flow + 3 ReinFlow
