@@ -47,6 +47,7 @@ class LFGPOFlow(ReFlow):
         ppo_eps=0.2,
         max_ratio_weight=5.0,
         ratio_reg_lambda=0.01,
+        bc_anchor_coef=0.0,
         num_grpo_samples=32,
         grpo_batch_norm_adv=False,
         advantage_mode="grpo",
@@ -77,6 +78,7 @@ class LFGPOFlow(ReFlow):
         self.ppo_eps = ppo_eps
         self.max_ratio_weight = max_ratio_weight
         self.ratio_reg_lambda = ratio_reg_lambda
+        self.bc_anchor_coef = bc_anchor_coef
         self.num_grpo_samples = num_grpo_samples
         self.grpo_batch_norm_adv = grpo_batch_norm_adv
         if advantage_mode not in {"grpo", "ppo"}:
@@ -88,6 +90,11 @@ class LFGPOFlow(ReFlow):
         self.use_target_policy = use_target_policy
         if use_target_policy:
             self.target_actor = copy.deepcopy(self.network).to(device)
+        # Optional fixed reference that prevents long sparse-reward runs from
+        # drifting too far from the pretrained flow policy.
+        if self.bc_anchor_coef > 0:
+            self.base_actor = copy.deepcopy(self.network).to(device).eval()
+            self.base_actor.requires_grad_(False)
 
     # ------------------------------------------------------------------ #
     # rollout interface: self.model(cond=..., deterministic=...) -> actions
@@ -192,7 +199,12 @@ class LFGPOFlow(ReFlow):
         (xt, t), v = self.generate_target(actions)   # flow-matching target v = x1 - x0
         v_hat = self.network(xt, t, obs)
         per_sample = F.mse_loss(v_hat, v, reduction="none").mean(dim=list(range(1, v.dim())))  # (B,)
-        return (weight * per_sample).mean()
+        loss = (weight * per_sample).mean()
+        if self.bc_anchor_coef > 0:
+            with torch.no_grad():
+                v_base = self.base_actor(xt, t, obs)
+            loss = loss + self.bc_anchor_coef * F.mse_loss(v_hat, v_base)
+        return loss
 
     # ------------------------------------------------------------------ #
     # 5. Polyak target updates
