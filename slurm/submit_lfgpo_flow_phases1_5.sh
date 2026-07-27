@@ -4,15 +4,19 @@
 # All runs use policy_update_freq=48 to match ReinFlow's ~5 actor updates/itr
 # while retaining dense critic updates.  Shard 0/1 splits the 12 jobs evenly
 # across two Slurm accounts without duplicate configurations.
-# Usage: bash slurm/submit_lfgpo_flow_phases1_5.sh <account> <0|1>
+# Usage: bash slurm/submit_lfgpo_flow_phases1_5.sh <account> <0|1> [all|can|square]
 
 set -euo pipefail
 
 ACCOUNT=${1:?Usage: $0 '<account>' '<0|1>'}
 SHARD=${2:?Usage: $0 '<account>' '<0|1>'}
+TARGET=${3:-all}
 [[ "${SHARD}" == 0 || "${SHARD}" == 1 ]] || { echo "Shard must be 0 or 1" >&2; exit 2; }
+[[ "${TARGET}" == all || "${TARGET}" == can || "${TARGET}" == square ]] || {
+  echo "Target must be all, can, or square" >&2; exit 2;
+}
 
-CAN_CKPT=${CAN_FLOW_CKPT:-pretrained/flow_bc/can_reflow_state75.pt}
+CAN_CKPT=${CAN_FLOW_CKPT:-pretrained/flow_bc/can_reflow_state50.pt}
 SQUARE_CKPT=${SQUARE_FLOW_CKPT:-pretrained/flow_bc/square_reflow_state275.pt}
 SEED=${LFGPO_SEED:-42}
 REPO=${LFGPO_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
@@ -30,6 +34,7 @@ submit() {
   shift 3
   local this_index=${INDEX}
   INDEX=$((INDEX + 1))
+  if [[ "${TARGET}" != all && "${env_name}" != "${TARGET}" ]]; then return; fi
   if (( this_index % 2 != SHARD )); then return; fi
   sbatch --account="${ACCOUNT}" \
     --export="ALL,LFGPO_REPO=${REPO},LFGPO_SEED=${SEED}" \
@@ -84,4 +89,3 @@ submit lf5_p5_sq_safe square "${SQUARE_CKPT}" \
 submit lf5_p5_sq_bal square "${SQUARE_CKPT}" \
   train.n_train_itr=201 train.actor_lr=5e-6 train.actor_lr_scheduler.min_lr=2e-6 train.ratio_lr=2e-5 \
   model.ppo_eps=0.1 model.max_ratio_weight=2 model.ratio_reg_lambda=0.05 +model.bc_anchor_coef=0.1
-
