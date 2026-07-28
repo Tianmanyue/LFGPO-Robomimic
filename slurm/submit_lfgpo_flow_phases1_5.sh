@@ -5,17 +5,19 @@
 # adaptive-noise sampling, and replay-action-inclusive GRPO normalization.
 # Shard 0/1 splits the 12 jobs evenly
 # across two Slurm accounts without duplicate configurations.
-# Usage: bash slurm/submit_lfgpo_flow_phases1_5.sh <account> <0|1> [all|can|square]
+# Usage: bash slurm/submit_lfgpo_flow_phases1_5.sh <account> <0|1> [all|can|square] [warmup_itr]
 
 set -euo pipefail
 
 ACCOUNT=${1:?Usage: $0 '<account>' '<0|1>'}
 SHARD=${2:?Usage: $0 '<account>' '<0|1>'}
 TARGET=${3:-all}
+WARMUP_ITR=${4:-0}
 [[ "${SHARD}" == 0 || "${SHARD}" == 1 ]] || { echo "Shard must be 0 or 1" >&2; exit 2; }
 [[ "${TARGET}" == all || "${TARGET}" == can || "${TARGET}" == square ]] || {
   echo "Target must be all, can, or square" >&2; exit 2;
 }
+[[ "${WARMUP_ITR}" =~ ^[0-9]+$ ]] || { echo "warmup_itr must be a non-negative integer" >&2; exit 2; }
 
 CAN_CKPT=${CAN_FLOW_CKPT:-pretrained/flow_bc/can_reflow_state75.pt}
 SQUARE_CKPT=${SQUARE_FLOW_CKPT:-pretrained/flow_bc/square_reflow_state275.pt}
@@ -37,11 +39,14 @@ submit() {
   INDEX=$((INDEX + 1))
   if [[ "${TARGET}" != all && "${env_name}" != "${TARGET}" ]]; then return; fi
   if (( this_index % 2 != SHARD )); then return; fi
+  if (( WARMUP_ITR > 0 )); then
+    job_name=${job_name/lfm_/lfw${WARMUP_ITR}_}
+  fi
   sbatch --account="${ACCOUNT}" \
     --export="ALL,LFGPO_REPO=${REPO},LFGPO_SEED=${SEED}" \
     --job-name="${job_name}" "${RUNNER}" lfgpo_flow "${env_name}" \
     "name=${job_name}" "base_policy_path=${ckpt}" \
-    train.n_critic_warmup_itr=0 train.val_freq=5 train.save_model_freq=10 \
+    train.n_critic_warmup_itr="${WARMUP_ITR}" train.val_freq=5 train.save_model_freq=10 \
     train.replay_ratio=1 +train.policy_update_freq=2 +train.target_update_freq=2 \
     +train.alpha_lr=7e-3 +train.alpha_update_freq=250 \
     model.num_grpo_samples=16 +model.adaptive_sampling_noise=true \

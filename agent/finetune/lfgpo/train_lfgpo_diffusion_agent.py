@@ -215,7 +215,13 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                     loss_critic.backward()
                     self.critic_optimizer.step()
 
-                    if gradient_step % self.policy_update_freq == 0:
+                    # During critic warmup, keep both the ratio network and actor
+                    # frozen. Updating the ratio from an untrained Q/advantage
+                    # contaminates the first post-warmup policy updates.
+                    if (
+                        self.itr >= self.n_critic_warmup_itr
+                        and gradient_step % self.policy_update_freq == 0
+                    ):
                         # 2. advantage from (target) twin Q
                         adv = self.model.compute_advantage(obs_b, actions_b)
 
@@ -230,12 +236,11 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                         loss_actor = self.model.loss_actor(obs_b, actions_b)
                         self.actor_optimizer.zero_grad()
                         loss_actor.backward()
-                        if self.itr >= self.n_critic_warmup_itr:
-                            if self.max_grad_norm is not None:
-                                torch.nn.utils.clip_grad_norm_(
-                                    self.model.actor.parameters(), self.max_grad_norm
-                                )
-                            self.actor_optimizer.step()
+                        if self.max_grad_norm is not None:
+                            torch.nn.utils.clip_grad_norm_(
+                                self.model.actor.parameters(), self.max_grad_norm
+                            )
+                        self.actor_optimizer.step()
 
                     # 5. Polyak target updates
                     if gradient_step % self.target_update_freq == 0:
