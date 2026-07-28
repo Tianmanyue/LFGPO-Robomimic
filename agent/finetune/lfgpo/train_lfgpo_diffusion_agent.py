@@ -73,6 +73,8 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                 [self.model.log_alpha], lr=cfg.train.get("alpha_lr", 7e-3)
             )
         self.alpha_update_freq = cfg.train.get("alpha_update_freq", 250)
+        self.freeze_actor = cfg.train.get("freeze_actor", False)
+        self.freeze_ratio = cfg.train.get("freeze_ratio", False)
 
         # buffer / update schedule
         self.buffer_size = cfg.train.buffer_size
@@ -221,26 +223,29 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                     if (
                         self.itr >= self.n_critic_warmup_itr
                         and gradient_step % self.policy_update_freq == 0
+                        and not (self.freeze_actor and self.freeze_ratio)
                     ):
                         # 2. advantage from (target) twin Q
                         adv = self.model.compute_advantage(obs_b, actions_b)
 
                         # 3. ratio net (PPO-clip surrogate + regularizer)
-                        for _ in range(self.ratio_updates_per_batch):
-                            loss_ratio, _ = self.model.loss_ratio(obs_b, actions_b, adv)
-                            self.ratio_optimizer.zero_grad()
-                            loss_ratio.backward()
-                            self.ratio_optimizer.step()
+                        if not self.freeze_ratio:
+                            for _ in range(self.ratio_updates_per_batch):
+                                loss_ratio, _ = self.model.loss_ratio(obs_b, actions_b, adv)
+                                self.ratio_optimizer.zero_grad()
+                                loss_ratio.backward()
+                                self.ratio_optimizer.step()
 
                         # 4. ratio-reweighted policy matching after critic warmup
-                        loss_actor = self.model.loss_actor(obs_b, actions_b)
-                        self.actor_optimizer.zero_grad()
-                        loss_actor.backward()
-                        if self.max_grad_norm is not None:
-                            torch.nn.utils.clip_grad_norm_(
-                                self.model.actor.parameters(), self.max_grad_norm
-                            )
-                        self.actor_optimizer.step()
+                        if not self.freeze_actor:
+                            loss_actor = self.model.loss_actor(obs_b, actions_b)
+                            self.actor_optimizer.zero_grad()
+                            loss_actor.backward()
+                            if self.max_grad_norm is not None:
+                                torch.nn.utils.clip_grad_norm_(
+                                    self.model.actor.parameters(), self.max_grad_norm
+                                )
+                            self.actor_optimizer.step()
 
                     # 5. Polyak target updates
                     if gradient_step % self.target_update_freq == 0:
@@ -286,8 +291,12 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                     run_results[-1]["eval_episode_reward"] = avg_episode_reward
                     run_results[-1]["eval_best_reward"] = avg_best_reward
                 else:
+                    diagnostics = getattr(self.model, "last_diagnostics", {})
+                    diagnostic_text = " ".join(
+                        f"{key} {value:.4f}" for key, value in diagnostics.items()
+                    )
                     log.info(
-                        f"{self.itr}: step {cnt_train_step:8d} | loss actor {loss_actor:8.4f} | loss critic {loss_critic:8.4f} | loss ratio {loss_ratio:8.4f} | reward {avg_episode_reward:8.4f} | t:{time:8.4f}"
+                        f"{self.itr}: step {cnt_train_step:8d} | loss actor {loss_actor:8.4f} | loss critic {loss_critic:8.4f} | loss ratio {loss_ratio:8.4f} | reward {avg_episode_reward:8.4f} | {diagnostic_text} | t:{time:8.4f}"
                     )
                     if self.use_wandb:
                         wandb.log(

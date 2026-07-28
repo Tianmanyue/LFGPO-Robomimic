@@ -99,6 +99,7 @@ class LFGPOFlow(ReFlow):
             )
         self.use_target_actor_for_sampling = use_target_actor_for_sampling
         self.grpo_include_replay_action = grpo_include_replay_action
+        self.last_diagnostics = {}
         self.num_grpo_samples = num_grpo_samples
         self.grpo_batch_norm_adv = grpo_batch_norm_adv
         if advantage_mode not in {"grpo", "ppo"}:
@@ -164,6 +165,11 @@ class LFGPOFlow(ReFlow):
         )
         mask = 1 - terminated
         target_q = rewards.view(-1) + gamma * next_q.view(-1) * mask.view(-1)
+        self.last_diagnostics.update({
+            "q_data": float(torch.min(current_q1, current_q2).detach().mean()),
+            "q_next": float(next_q.detach().mean()),
+            "q_target": float(target_q.detach().mean()),
+        })
         return torch.mean((current_q1.view(-1) - target_q) ** 2) + torch.mean(
             (current_q2.view(-1) - target_q) ** 2
         )
@@ -214,6 +220,11 @@ class LFGPOFlow(ReFlow):
         else:
             std = group_q.std(dim=1, correction=0)
             adv = (q_sa - mean) / (std + self.adv_eps)
+        self.last_diagnostics.update({
+            "adv_mean": float(adv.mean()),
+            "adv_std": float(adv.std(correction=0)),
+            "group_std": float(group_q.std(dim=1, correction=0).mean()),
+        })
         return adv
 
     # ------------------------------------------------------------------ #
@@ -233,6 +244,10 @@ class LFGPOFlow(ReFlow):
         g_hat_2 = r_beta_prime.mean() - 1.0
         regularizer = self.ratio_reg_lambda * g_hat_1 * g_hat_2
 
+        self.last_diagnostics.update({
+            "ratio_mean": float(r_beta.detach().mean()),
+            "ratio_max": float(r_beta.detach().max()),
+        })
         return -ppo_obj.mean() + regularizer, r_beta.detach().mean()
 
     # ------------------------------------------------------------------ #
@@ -251,6 +266,10 @@ class LFGPOFlow(ReFlow):
             with torch.no_grad():
                 v_base = self.base_actor(xt, t, obs)
             loss = loss + self.bc_anchor_coef * F.mse_loss(v_hat, v_base)
+        self.last_diagnostics["noise_std"] = float(
+            self.noise_scale * self.log_alpha.detach().exp()
+            if self.adaptive_sampling_noise else self.sampling_noise_std
+        )
         return loss
 
     def loss_alpha(self):
