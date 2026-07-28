@@ -22,3 +22,7 @@ Transport DPPO job 7955270 uses the state8000 base policy, starts at 17.0%,
 and reaches 96.83% at itr 120. The job is terminated by the 24-hour wall-time
 before completing 201 iterations, so 96.83% is a partial-run best rather than a
 completed final score.
+
+For the Phase 9 matched short-horizon comparison, DPPO is 77.95% at itr 50.
+With eval every 10 itr, both DPPO and LFGPO-Diffusion have 45 training
+iterations by that point: `45 * 400 * 50 * 8 = 7.2M` environment steps.
