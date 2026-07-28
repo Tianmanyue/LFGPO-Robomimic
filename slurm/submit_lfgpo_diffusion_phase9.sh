@@ -49,3 +49,23 @@ submit ld_p9_sq_rs225_reg04 square train.n_train_itr=201 \
 submit ld_p9_sq_rs275_reg04 square train.n_train_itr=201 \
   train.actor_lr=2e-5 train.ratio_lr=1e-4 train.scale_reward_factor=2.75 \
   model.ppo_eps=0.2 model.max_ratio_weight=2 model.ratio_reg_lambda=0.04
+
+# Transport: 121 itr with less-frequent eval is sized to finish within the
+# 24-hour runner limit. Current DPPO reference is a partial 96.83% at itr 120.
+# Transfer the Can/Square winners plus two stability-oriented alternatives.
+submit ld_p9_tr_canbest transport train.n_train_itr=121 train.val_freq=20 \
+  train.n_critic_warmup_itr=10 train.actor_lr=1.25e-5 train.ratio_lr=7.5e-5 \
+  train.scale_reward_factor=3 model.ppo_eps=0.2 \
+  model.max_ratio_weight=2 model.ratio_reg_lambda=0.035
+submit ld_p9_tr_sqbest transport train.n_train_itr=121 train.val_freq=20 \
+  train.n_critic_warmup_itr=10 train.actor_lr=2e-5 train.ratio_lr=1e-4 \
+  train.scale_reward_factor=2.5 model.ppo_eps=0.2 \
+  model.max_ratio_weight=2 model.ratio_reg_lambda=0.05
+submit ld_p9_tr_conservative transport train.n_train_itr=121 train.val_freq=20 \
+  train.n_critic_warmup_itr=10 train.actor_lr=5e-6 train.ratio_lr=5e-5 \
+  train.scale_reward_factor=3 model.ppo_eps=0.15 \
+  model.max_ratio_weight=1.5 model.ratio_reg_lambda=0.05
+submit ld_p9_tr_warm20 transport train.n_train_itr=121 train.val_freq=20 \
+  train.n_critic_warmup_itr=20 train.actor_lr=1e-5 train.ratio_lr=7.5e-5 \
+  train.scale_reward_factor=3 model.ppo_eps=0.2 \
+  model.max_ratio_weight=2 model.ratio_reg_lambda=0.035
