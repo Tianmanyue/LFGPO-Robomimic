@@ -40,7 +40,7 @@ submit() {
     --export="ALL,LFGPO_REPO=${REPO},LFGPO_SEED=${SEED}" \
     --job-name="${job_name}" "${RUNNER}" lfgpo_flow "${env_name}" \
     "name=${job_name}" "base_policy_path=${ckpt}" \
-    train.val_freq=5 train.save_model_freq=5 \
+    train.val_freq=5 train.save_model_freq=10 \
     +train.policy_update_freq=48 "$@"
 }
 
