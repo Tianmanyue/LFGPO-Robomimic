@@ -67,6 +67,12 @@ class TrainLFGPODiffusionAgent(TrainAgent):
             lr=cfg.train.ratio_lr,
             weight_decay=cfg.train.get("ratio_weight_decay", 0.0),
         )
+        self.alpha_optimizer = None
+        if hasattr(self.model, "log_alpha"):
+            self.alpha_optimizer = torch.optim.Adam(
+                [self.model.log_alpha], lr=cfg.train.get("alpha_lr", 7e-3)
+            )
+        self.alpha_update_freq = cfg.train.get("alpha_update_freq", 250)
 
         # buffer / update schedule
         self.buffer_size = cfg.train.buffer_size
@@ -86,6 +92,8 @@ class TrainLFGPODiffusionAgent(TrainAgent):
             raise ValueError("train.policy_update_freq must be >= 1")
         if self.target_update_freq < 1:
             raise ValueError("train.target_update_freq must be >= 1")
+        if self.alpha_update_freq < 1:
+            raise ValueError("train.alpha_update_freq must be >= 1")
 
     def run(self):
         # FIFO replay buffer
@@ -98,6 +106,7 @@ class TrainLFGPODiffusionAgent(TrainAgent):
         timer = Timer()
         run_results = []
         cnt_train_step = 0
+        gradient_step = 0
         last_itr_eval = False
         done_venv = np.zeros((1, self.n_envs))
         while self.itr < self.n_train_itr:
@@ -206,7 +215,7 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                     loss_critic.backward()
                     self.critic_optimizer.step()
 
-                    if batch_idx % self.policy_update_freq == 0:
+                    if gradient_step % self.policy_update_freq == 0:
                         # 2. advantage from (target) twin Q
                         adv = self.model.compute_advantage(obs_b, actions_b)
 
@@ -229,9 +238,19 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                             self.actor_optimizer.step()
 
                     # 5. Polyak target updates
-                    if batch_idx % self.target_update_freq == 0:
+                    if gradient_step % self.target_update_freq == 0:
                         self.model.update_target_critic(self.critic_tau)
                         self.model.update_target_policy(self.policy_tau)
+
+                    if (
+                        self.alpha_optimizer is not None
+                        and gradient_step % self.alpha_update_freq == 0
+                    ):
+                        loss_alpha = self.model.loss_alpha()
+                        self.alpha_optimizer.zero_grad()
+                        loss_alpha.backward()
+                        self.alpha_optimizer.step()
+                    gradient_step += 1
 
             self.actor_lr_scheduler.step()
             self.critic_lr_scheduler.step()

@@ -17,6 +17,7 @@ reward_scale: lfgpo MuJoCo used ~0.2-0.5; robomimic sparse reward -> RETUNE.
 
 import copy
 import logging
+import math
 
 import torch
 import torch.nn.functional as F
@@ -49,6 +50,10 @@ class LFGPOFlow(ReFlow):
         ratio_reg_lambda=0.01,
         bc_anchor_coef=0.0,
         sampling_noise_std=0.0,
+        adaptive_sampling_noise=False,
+        noise_scale=0.1,
+        alpha_init=5.0,
+        target_entropy_scale=0.9,
         use_target_actor_for_sampling=True,
         grpo_include_replay_action=False,
         num_grpo_samples=32,
@@ -85,6 +90,13 @@ class LFGPOFlow(ReFlow):
         self.ratio_reg_lambda = ratio_reg_lambda
         self.bc_anchor_coef = bc_anchor_coef
         self.sampling_noise_std = sampling_noise_std
+        self.adaptive_sampling_noise = adaptive_sampling_noise
+        self.noise_scale = noise_scale
+        self.target_entropy = -action_dim * target_entropy_scale
+        if adaptive_sampling_noise:
+            self.log_alpha = torch.nn.Parameter(
+                torch.tensor(math.log(alpha_init), device=device, dtype=torch.float32)
+            )
         self.use_target_actor_for_sampling = use_target_actor_for_sampling
         self.grpo_include_replay_action = grpo_include_replay_action
         self.num_grpo_samples = num_grpo_samples
@@ -127,8 +139,11 @@ class LFGPOFlow(ReFlow):
         finally:
             self.network = orig
         actions = s.trajectories
-        if add_noise and self.sampling_noise_std > 0:
-            actions = actions + torch.randn_like(actions) * self.sampling_noise_std
+        noise_std = self.sampling_noise_std
+        if self.adaptive_sampling_noise:
+            noise_std = self.noise_scale * self.log_alpha.detach().exp().item()
+        if add_noise and noise_std > 0:
+            actions = actions + torch.randn_like(actions) * noise_std
             actions = torch.clamp(actions, self.act_min, self.act_max)
         return actions  # (B, horizon, act)
 
@@ -237,6 +252,16 @@ class LFGPOFlow(ReFlow):
                 v_base = self.base_actor(xt, t, obs)
             loss = loss + self.bc_anchor_coef * F.mse_loss(v_hat, v_base)
         return loss
+
+    def loss_alpha(self):
+        """Match the MuJoCo/JAX adaptive exploration-noise objective."""
+        if not self.adaptive_sampling_noise:
+            raise RuntimeError("Adaptive sampling noise is disabled")
+        sigma = self.noise_scale * self.log_alpha.exp()
+        approx_entropy = 0.5 * self.action_dim * torch.log(
+            torch.as_tensor(2.0 * math.pi * math.e, device=sigma.device) * sigma.square()
+        )
+        return -self.log_alpha * ((-approx_entropy).detach() + self.target_entropy)
 
     # ------------------------------------------------------------------ #
     # 5. Polyak target updates
