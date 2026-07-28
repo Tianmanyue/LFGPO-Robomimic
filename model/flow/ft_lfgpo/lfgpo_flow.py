@@ -48,6 +48,9 @@ class LFGPOFlow(ReFlow):
         max_ratio_weight=5.0,
         ratio_reg_lambda=0.01,
         bc_anchor_coef=0.0,
+        sampling_noise_std=0.0,
+        use_target_actor_for_sampling=True,
+        grpo_include_replay_action=False,
         num_grpo_samples=32,
         grpo_batch_norm_adv=False,
         advantage_mode="grpo",
@@ -73,12 +76,17 @@ class LFGPOFlow(ReFlow):
         self.target_q = copy.deepcopy(critic).to(device)
         self.ratio_net = ratio_net.to(device)
         self.actor = self.network
+        self.act_min = act_min
+        self.act_max = act_max
 
         self.inference_steps = inference_steps
         self.ppo_eps = ppo_eps
         self.max_ratio_weight = max_ratio_weight
         self.ratio_reg_lambda = ratio_reg_lambda
         self.bc_anchor_coef = bc_anchor_coef
+        self.sampling_noise_std = sampling_noise_std
+        self.use_target_actor_for_sampling = use_target_actor_for_sampling
+        self.grpo_include_replay_action = grpo_include_replay_action
         self.num_grpo_samples = num_grpo_samples
         self.grpo_batch_norm_adv = grpo_batch_norm_adv
         if advantage_mode not in {"grpo", "ppo"}:
@@ -110,7 +118,7 @@ class LFGPOFlow(ReFlow):
     # sampling (flow ODE integration) from online / target policy
     # ------------------------------------------------------------------ #
     @torch.no_grad()
-    def sample_action(self, cond, use_target=False):
+    def sample_action(self, cond, use_target=False, add_noise=False):
         net = self.target_actor if (use_target and self.use_target_policy) else self.network
         orig = self.network
         self.network = net
@@ -118,17 +126,27 @@ class LFGPOFlow(ReFlow):
             s = self.sample(cond=cond, inference_steps=self.inference_steps)
         finally:
             self.network = orig
-        return s.trajectories  # (B, horizon, act)
+        actions = s.trajectories
+        if add_noise and self.sampling_noise_std > 0:
+            actions = actions + torch.randn_like(actions) * self.sampling_noise_std
+            actions = torch.clamp(actions, self.act_min, self.act_max)
+        return actions  # (B, horizon, act)
 
     # ------------------------------------------------------------------ #
     # 1. critic: twin-Q TD (a' ~ flow policy)
     # ------------------------------------------------------------------ #
     def loss_critic(self, obs, next_obs, actions, rewards, terminated, gamma):
         current_q1, current_q2 = self.critic_q(obs, actions)
-        next_actions = self.sample_action(next_obs, use_target=True)
+        next_actions = self.sample_action(
+            next_obs,
+            use_target=self.use_target_actor_for_sampling,
+            add_noise=True,
+        )
         with torch.no_grad():
             next_q1, next_q2 = self.target_q(next_obs, next_actions)
-        next_q = torch.min(next_q1, next_q2)
+        next_q = torch.nan_to_num(
+            torch.min(next_q1, next_q2), nan=0.0, posinf=1e4, neginf=-1e4
+        )
         mask = 1 - terminated
         target_q = rewards.view(-1) + gamma * next_q.view(-1) * mask.view(-1)
         return torch.mean((current_q1.view(-1) - target_q) ** 2) + torch.mean(
@@ -147,7 +165,11 @@ class LFGPOFlow(ReFlow):
         if self.advantage_mode == "ppo":
             # Match LFGPO-Diffusion: estimate V(s) with one independent
             # target-policy action, then optionally normalize the minibatch.
-            v_action = self.sample_action(obs, use_target=True)
+            v_action = self.sample_action(
+                obs,
+                use_target=self.use_target_actor_for_sampling,
+                add_noise=True,
+            )
             vq1, vq2 = self.target_q(obs, v_action)
             adv = q_sa - torch.min(vq1, vq2).view(-1)
             if self.adv_norm:
@@ -158,16 +180,24 @@ class LFGPOFlow(ReFlow):
         G = self.num_grpo_samples
         state = obs["state"]  # (B, cond_steps, obs_dim)
         rep = {"state": state.repeat_interleave(G, dim=0)}  # (B*G, ...)
-        a_g = self.sample_action(rep, use_target=True)       # (B*G, horizon, act)
+        a_g = self.sample_action(
+            rep,
+            use_target=self.use_target_actor_for_sampling,
+            add_noise=True,
+        )                                                   # (B*G, horizon, act)
         gq1, gq2 = self.target_q(rep, a_g)
         group_q = torch.min(gq1, gq2).view(B, G)             # (B, G)
 
+        if self.grpo_include_replay_action:
+            # Match the successful MuJoCo implementation: normalize the replay
+            # action together with the G freshly sampled actions (G+1 group).
+            group_q = torch.cat([group_q, q_sa[:, None]], dim=1)
         mean = group_q.mean(dim=1)
         if self.grpo_batch_norm_adv:
             adv = q_sa - mean
             adv = (adv - adv.mean()) / (adv.std() + self.adv_eps)
         else:
-            std = group_q.std(dim=1)
+            std = group_q.std(dim=1, correction=0)
             adv = (q_sa - mean) / (std + self.adv_eps)
         return adv
 
@@ -180,7 +210,9 @@ class LFGPOFlow(ReFlow):
         r_clip = torch.clamp(r_beta, 1.0 - self.ppo_eps, 1.0 + self.ppo_eps)
         ppo_obj = torch.minimum(r_beta * adv_sg, r_clip * adv_sg)
 
-        action_prime = self.sample_action(obs, use_target=True)
+        action_prime = self.sample_action(
+            obs, use_target=self.use_target_actor_for_sampling, add_noise=False
+        )
         r_beta_prime = self.ratio_net(obs, action_prime)
         g_hat_1 = r_beta.mean() - 1.0
         g_hat_2 = r_beta_prime.mean() - 1.0

@@ -81,8 +81,11 @@ class TrainLFGPODiffusionAgent(TrainAgent):
         # for backwards compatibility, but allow sweeps to decouple the critic
         # update rate from actor/ratio updates.
         self.policy_update_freq = cfg.train.get("policy_update_freq", 1)
+        self.target_update_freq = cfg.train.get("target_update_freq", 1)
         if self.policy_update_freq < 1:
             raise ValueError("train.policy_update_freq must be >= 1")
+        if self.target_update_freq < 1:
+            raise ValueError("train.target_update_freq must be >= 1")
 
     def run(self):
         # FIFO replay buffer
@@ -226,8 +229,9 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                             self.actor_optimizer.step()
 
                     # 5. Polyak target updates
-                    self.model.update_target_critic(self.critic_tau)
-                    self.model.update_target_policy(self.policy_tau)
+                    if batch_idx % self.target_update_freq == 0:
+                        self.model.update_target_critic(self.critic_tau)
+                        self.model.update_target_policy(self.policy_tau)
 
             self.actor_lr_scheduler.step()
             self.critic_lr_scheduler.step()
