@@ -3,10 +3,11 @@
 # State75 Can diagnostics that restore the successful MuJoCo off-policy data path:
 # UTD=1, delayed policy/target updates, current-policy noisy target/group actions,
 # and GRPO normalization over the replay action plus G sampled actions.
-# Usage: bash slurm/submit_lfgpo_flow_state75_faithful.sh <account>
+# Usage: bash slurm/submit_lfgpo_flow_state75_faithful.sh <account> [all|n01|n03]
 
 set -euo pipefail
 ACCOUNT=${1:?Usage: $0 '<account>'}
+SELECTOR=${2:-all}
 REPO=${LFGPO_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 RUNNER=slurm/run_finetune_seed42.sbatch
 CKPT=${CAN_FLOW_CKPT:-pretrained/flow_bc/can_reflow_state75.pt}
@@ -29,5 +30,15 @@ submit() {
     +model.grpo_include_replay_action=true
 }
 
-submit lf_faith_s75_n01 0.1
-submit lf_faith_s75_n03 0.3
+case "${SELECTOR}" in
+  all)
+    submit lf_faith_s75_n01 0.1
+    submit lf_faith_s75_n03 0.3
+    ;;
+  n01) submit lf_faith_s75_n01 0.1 ;;
+  n03) submit lf_faith_s75_n03 0.3 ;;
+  *)
+    echo "Unknown selector '${SELECTOR}' (expected all, n01, or n03)" >&2
+    exit 2
+    ;;
+esac
