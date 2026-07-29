@@ -34,7 +34,11 @@ class TrainLFGPODiffusionAgent(TrainAgent):
         self.n_critic_warmup_itr = cfg.train.n_critic_warmup_itr
 
         # optimizers: actor (diffusion) / critic (twin Q) / ratio net
-        self.actor_optimizer = torch.optim.AdamW(
+        optimizer_type = cfg.train.get("optimizer_type", "adamw").lower()
+        if optimizer_type not in {"adam", "adamw"}:
+            raise ValueError(f"Unknown train.optimizer_type={optimizer_type!r}")
+        optimizer_cls = torch.optim.Adam if optimizer_type == "adam" else torch.optim.AdamW
+        self.actor_optimizer = optimizer_cls(
             self.model.actor.parameters(),
             lr=cfg.train.actor_lr,
             weight_decay=cfg.train.actor_weight_decay,
@@ -48,7 +52,7 @@ class TrainLFGPODiffusionAgent(TrainAgent):
             warmup_steps=cfg.train.actor_lr_scheduler.warmup_steps,
             gamma=1.0,
         )
-        self.critic_optimizer = torch.optim.AdamW(
+        self.critic_optimizer = optimizer_cls(
             self.model.critic_q.parameters(),
             lr=cfg.train.critic_lr,
             weight_decay=cfg.train.critic_weight_decay,
@@ -62,7 +66,7 @@ class TrainLFGPODiffusionAgent(TrainAgent):
             warmup_steps=cfg.train.critic_lr_scheduler.warmup_steps,
             gamma=1.0,
         )
-        self.ratio_optimizer = torch.optim.AdamW(
+        self.ratio_optimizer = optimizer_cls(
             self.model.ratio_net.parameters(),
             lr=cfg.train.ratio_lr,
             weight_decay=cfg.train.get("ratio_weight_decay", 0.0),
@@ -75,6 +79,10 @@ class TrainLFGPODiffusionAgent(TrainAgent):
         self.alpha_update_freq = cfg.train.get("alpha_update_freq", 250)
         self.freeze_actor = cfg.train.get("freeze_actor", False)
         self.freeze_ratio = cfg.train.get("freeze_ratio", False)
+        self.use_lr_scheduler = cfg.train.get("use_lr_scheduler", True)
+        self.positive_replay_fraction = cfg.train.get("positive_replay_fraction", 0.0)
+        if not 0.0 <= self.positive_replay_fraction <= 1.0:
+            raise ValueError("train.positive_replay_fraction must be in [0, 1]")
 
         # buffer / update schedule
         self.buffer_size = cfg.train.buffer_size
@@ -202,7 +210,25 @@ class TrainLFGPODiffusionAgent(TrainAgent):
 
                 loss_actor = loss_critic = loss_ratio = torch.tensor(0.0)
                 for batch_idx in range(num_batch):
-                    inds = np.random.choice(len(obs_trajs), self.batch_size)
+                    if self.positive_replay_fraction > 0:
+                        positive = np.flatnonzero(reward_trajs_flat > 0)
+                        nonpositive = np.flatnonzero(reward_trajs_flat <= 0)
+                        n_positive = min(
+                            int(self.batch_size * self.positive_replay_fraction),
+                            self.batch_size if len(positive) else 0,
+                        )
+                        n_other = self.batch_size - n_positive
+                        positive_inds = (
+                            np.random.choice(positive, n_positive) if n_positive else np.empty(0, dtype=int)
+                        )
+                        other_pool = nonpositive if len(nonpositive) else np.arange(len(obs_trajs))
+                        inds = np.concatenate([
+                            positive_inds,
+                            np.random.choice(other_pool, n_other),
+                        ])
+                        np.random.shuffle(inds)
+                    else:
+                        inds = np.random.choice(len(obs_trajs), self.batch_size)
                     obs_b = {"state": torch.from_numpy(obs_trajs[inds]).float().to(self.device)}
                     next_obs_b = {"state": torch.from_numpy(next_obs_trajs[inds]).float().to(self.device)}
                     actions_b = torch.from_numpy(action_trajs[inds]).float().to(self.device)
@@ -262,8 +288,9 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                         self.alpha_optimizer.step()
                     gradient_step += 1
 
-            self.actor_lr_scheduler.step()
-            self.critic_lr_scheduler.step()
+            if self.use_lr_scheduler:
+                self.actor_lr_scheduler.step()
+                self.critic_lr_scheduler.step()
 
             if self.itr % self.save_model_freq == 0 or self.itr == self.n_train_itr - 1:
                 self.save_model()

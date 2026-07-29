@@ -54,6 +54,7 @@ class LFGPOFlow(ReFlow):
         noise_scale=0.1,
         alpha_init=5.0,
         target_entropy_scale=0.9,
+        actor_loss_scale=1.0,
         use_target_actor_for_sampling=True,
         grpo_include_replay_action=False,
         num_grpo_samples=32,
@@ -93,6 +94,7 @@ class LFGPOFlow(ReFlow):
         self.adaptive_sampling_noise = adaptive_sampling_noise
         self.noise_scale = noise_scale
         self.target_entropy = -action_dim * target_entropy_scale
+        self.actor_loss_scale = actor_loss_scale
         if adaptive_sampling_noise:
             self.log_alpha = torch.nn.Parameter(
                 torch.tensor(math.log(alpha_init), device=device, dtype=torch.float32)
@@ -270,7 +272,7 @@ class LFGPOFlow(ReFlow):
             self.noise_scale * self.log_alpha.detach().exp()
             if self.adaptive_sampling_noise else self.sampling_noise_std
         )
-        return loss
+        return self.actor_loss_scale * loss
 
     def loss_alpha(self):
         """Match the MuJoCo/JAX adaptive exploration-noise objective."""

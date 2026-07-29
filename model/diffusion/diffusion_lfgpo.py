@@ -41,15 +41,20 @@ class RatioNet(nn.Module):
     """
 
     def __init__(self, obs_dim, action_dim, cond_steps, horizon_steps,
-                 hidden_sizes=(256, 256, 256), logit_clip=10.0):
+                 hidden_sizes=(256, 256, 256), logit_clip=10.0,
+                 activation_type="ReLU"):
         super().__init__()
         self.cond_dim = obs_dim * cond_steps
         self.act_dim = action_dim * horizon_steps
         self.logit_clip = logit_clip
+        try:
+            activation_cls = getattr(nn, activation_type)
+        except AttributeError as exc:
+            raise ValueError(f"Unknown ratio activation {activation_type!r}") from exc
         layers = []
         last = self.cond_dim + self.act_dim
         for h in hidden_sizes:
-            layers += [nn.Linear(last, h), nn.ReLU()]
+            layers += [nn.Linear(last, h), activation_cls()]
             last = h
         self.trunk = nn.Sequential(*layers)
         self.head = nn.Linear(last, 1)
