@@ -33,7 +33,7 @@ else
   echo "Starting Transport Flow BC from scratch"
 fi
 
-for TARGET_EPOCH in $(seq $((START_EPOCH + 25)) 25 500); do
+for TARGET_EPOCH in $(seq $((START_EPOCH + 25)) 25 400); do
   MARKER=$(mktemp "${TMPDIR:-/tmp}/transport-bc-${TARGET_EPOCH}.XXXXXX")
   RESUME_OVERRIDE=()
   if [[ -n "${CURRENT_CKPT}" ]]; then
@@ -67,4 +67,4 @@ for TARGET_EPOCH in $(seq $((START_EPOCH + 25)) 25 500); do
     device=cuda:0 +sim_device=cuda:0 wandb=null seed=42
 done
 
-echo "Completed Transport Flow BC continuation/evaluation through epoch 500"
+echo "Completed Transport Flow BC continuation/evaluation through epoch 400"
