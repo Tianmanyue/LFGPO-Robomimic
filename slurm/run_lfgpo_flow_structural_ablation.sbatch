@@ -40,7 +40,8 @@ srun python script/run.py \
   "name=can_reflow_${MODE}_bc150" train.n_epochs=151 train.save_model_freq=150 \
   device=cuda:0 wandb=null "${PRE[@]}"
 
-CKPT=$(find runtime/log/robomimic/pretrain -path '*/checkpoint/state_150.pt' \
+CKPT=$(find runtime/log/robomimic/pretrain \
+  -path "*/can_reflow_${MODE}_bc150/*/checkpoint/state_150.pt" \
   -newer "${MARKER}" -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)
 rm -f "${MARKER}"
 [[ -n "${CKPT}" && -f "${CKPT}" ]] || { echo "No state150 produced for ${MODE}" >&2; exit 1; }
