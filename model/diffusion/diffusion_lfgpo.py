@@ -84,6 +84,7 @@ class LFGPODiffusion(RWRDiffusion):
         ppo_eps=0.2,
         max_ratio_weight=5.0,
         ratio_reg_lambda=0.01,
+        bc_anchor_coef=0.0,
         adv_norm=True,
         use_target_policy=True,
         **kwargs,
@@ -98,12 +99,18 @@ class LFGPODiffusion(RWRDiffusion):
         self.ppo_eps = ppo_eps
         self.max_ratio_weight = max_ratio_weight
         self.ratio_reg_lambda = ratio_reg_lambda
+        self.bc_anchor_coef = bc_anchor_coef
         self.adv_norm = adv_norm
 
         # Polyak target policy used to sample a' for the advantage baseline (lfgpo.py).
         self.use_target_policy = use_target_policy
         if use_target_policy:
             self.target_actor = copy.deepcopy(self.network)
+        self.base_actor = None
+        if self.bc_anchor_coef > 0:
+            self.base_actor = copy.deepcopy(self.network).eval()
+            for param in self.base_actor.parameters():
+                param.requires_grad_(False)
 
     # ------------------------------------------------------------------ #
     # sampling helpers
@@ -187,8 +194,21 @@ class LFGPODiffusion(RWRDiffusion):
             weight = torch.clamp(r_norm, 0.0, self.max_ratio_weight)  # engineering fix: hard cap
         B = actions.shape[0]
         t = torch.randint(0, self.denoising_steps, (B,), device=actions.device).long()
-        # RWRDiffusion.p_losses multiplies per-sample denoising loss by `rewards`; here weight=r_beta.
-        return self.p_losses(actions, obs, weight, t)
+        noise = torch.randn_like(actions)
+        x_noisy = self.q_sample(x_start=actions, t=t, noise=noise)
+        prediction = self.network(x_noisy, t, cond=obs)
+        target = noise if self.predict_epsilon else actions
+        per_sample = einops.reduce(
+            F.mse_loss(prediction, target, reduction="none"), "b h d -> b", "mean"
+        )
+        loss = (weight * per_sample).mean()
+        if self.base_actor is not None:
+            with torch.no_grad():
+                base_prediction = self.base_actor(x_noisy, t, cond=obs)
+            loss = loss + self.bc_anchor_coef * F.mse_loss(
+                prediction, base_prediction
+            )
+        return loss
 
     # ------------------------------------------------------------------ #
     # 5. Polyak target updates
