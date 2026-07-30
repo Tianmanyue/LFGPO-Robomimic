@@ -54,6 +54,9 @@ class LFGPOFlow(ReFlow):
         noise_scale=0.1,
         alpha_init=5.0,
         target_entropy_scale=0.9,
+        noise_on_critic_target=True,
+        noise_on_advantage_samples=True,
+        entropy_include_horizon=False,
         actor_loss_scale=1.0,
         use_target_actor_for_sampling=True,
         grpo_include_replay_action=False,
@@ -93,7 +96,10 @@ class LFGPOFlow(ReFlow):
         self.sampling_noise_std = sampling_noise_std
         self.adaptive_sampling_noise = adaptive_sampling_noise
         self.noise_scale = noise_scale
-        self.target_entropy = -action_dim * target_entropy_scale
+        self.noise_on_critic_target = noise_on_critic_target
+        self.noise_on_advantage_samples = noise_on_advantage_samples
+        self.entropy_dim = action_dim * (horizon_steps if entropy_include_horizon else 1)
+        self.target_entropy = -self.entropy_dim * target_entropy_scale
         self.actor_loss_scale = actor_loss_scale
         if adaptive_sampling_noise:
             self.log_alpha = torch.nn.Parameter(
@@ -158,7 +164,7 @@ class LFGPOFlow(ReFlow):
         next_actions = self.sample_action(
             next_obs,
             use_target=self.use_target_actor_for_sampling,
-            add_noise=True,
+            add_noise=self.noise_on_critic_target,
         )
         with torch.no_grad():
             next_q1, next_q2 = self.target_q(next_obs, next_actions)
@@ -191,7 +197,7 @@ class LFGPOFlow(ReFlow):
             v_action = self.sample_action(
                 obs,
                 use_target=self.use_target_actor_for_sampling,
-                add_noise=True,
+                add_noise=self.noise_on_advantage_samples,
             )
             vq1, vq2 = self.target_q(obs, v_action)
             adv = q_sa - torch.min(vq1, vq2).view(-1)
@@ -206,7 +212,7 @@ class LFGPOFlow(ReFlow):
         a_g = self.sample_action(
             rep,
             use_target=self.use_target_actor_for_sampling,
-            add_noise=True,
+            add_noise=self.noise_on_advantage_samples,
         )                                                   # (B*G, horizon, act)
         gq1, gq2 = self.target_q(rep, a_g)
         group_q = torch.min(gq1, gq2).view(B, G)             # (B, G)
@@ -226,6 +232,9 @@ class LFGPOFlow(ReFlow):
             "adv_mean": float(adv.mean()),
             "adv_std": float(adv.std(correction=0)),
             "group_std": float(group_q.std(dim=1, correction=0).mean()),
+            "q_replay": float(q_sa.mean()),
+            "q_group": float(group_q.mean()),
+            "q_replay_group_gap": float((q_sa - group_q.mean(dim=1)).mean()),
         })
         return adv
 
@@ -260,6 +269,8 @@ class LFGPOFlow(ReFlow):
             r_raw = self.ratio_net(obs, actions)
             r_norm = r_raw / (r_raw.mean() + 1e-8)
             weight = torch.clamp(r_norm, 0.0, self.max_ratio_weight)  # (B,)
+            weight_sum = weight.sum()
+            weight_ess = weight_sum.square() / (weight.square().sum() + 1e-8)
         (xt, t), v = self.generate_target(actions)   # flow-matching target v = x1 - x0
         v_hat = self.network(xt, t, obs)
         per_sample = F.mse_loss(v_hat, v, reduction="none").mean(dim=list(range(1, v.dim())))  # (B,)
@@ -272,6 +283,12 @@ class LFGPOFlow(ReFlow):
             self.noise_scale * self.log_alpha.detach().exp()
             if self.adaptive_sampling_noise else self.sampling_noise_std
         )
+        self.last_diagnostics.update({
+            "weight_mean": float(weight.mean()),
+            "weight_std": float(weight.std(correction=0)),
+            "weight_max": float(weight.max()),
+            "weight_ess_frac": float(weight_ess / weight.numel()),
+        })
         return self.actor_loss_scale * loss
 
     def loss_alpha(self):
@@ -279,7 +296,7 @@ class LFGPOFlow(ReFlow):
         if not self.adaptive_sampling_noise:
             raise RuntimeError("Adaptive sampling noise is disabled")
         sigma = self.noise_scale * self.log_alpha.exp()
-        approx_entropy = 0.5 * self.action_dim * torch.log(
+        approx_entropy = 0.5 * self.entropy_dim * torch.log(
             torch.as_tensor(2.0 * math.pi * math.e, device=sigma.device) * sigma.square()
         )
         return -self.log_alpha * ((-approx_entropy).detach() + self.target_entropy)
