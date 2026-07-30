@@ -38,7 +38,10 @@ for TARGET_EPOCH in $(seq $((START_EPOCH + 25)) 25 500); do
   RESUME_OVERRIDE=()
   if [[ -n "${CURRENT_CKPT}" ]]; then
     RESUME_OVERRIDE=("+base_policy_path=${CURRENT_CKPT}")
-    TRAIN_EPOCHS=$((TARGET_EPOCH - START_EPOCH))
+    # On resume, self.epoch is one behind the loop's epoch variable until the
+    # first iteration completes, so one extra loop is required to emit the
+    # checkpoint at exactly TARGET_EPOCH.
+    TRAIN_EPOCHS=$((TARGET_EPOCH - START_EPOCH + 1))
   else
     # A scratch run includes epoch zero, so state_25 needs 26 loop epochs.
     TRAIN_EPOCHS=$((TARGET_EPOCH + 1))
