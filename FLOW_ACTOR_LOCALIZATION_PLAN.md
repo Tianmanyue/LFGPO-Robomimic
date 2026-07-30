@@ -57,3 +57,41 @@ Only after Stage B identifies the failing edge, test independently:
   group spread, actor-to-base distance, and test stronger trust/offline anchoring.
   Do not assume Flow and Diffusion share the same root cause merely because both
   can collapse.
+
+## Literature-driven chunk hypotheses
+
+ReinFlow explicitly supports action chunking. Its Appendix A.2 treats a chunk's
+log likelihood as a **sum of per-action log likelihoods**, under conditional
+independence given the initial observation. Its reported Robomimic horizons are
+4 for Can/Square and 8 for Transport. Therefore action chunks are not inherently
+invalid for Flow policies.
+
+The more relevant differences from current LFGPO-Flow are:
+
+1. ReinFlow has a factorized likelihood construction across chunk positions;
+   LFGPO learns one unrestricted scalar ratio from the flattened whole chunk.
+2. ReinFlow reports PPO clipping epsilon 0.001 for Robomimic visual tasks and a
+   target-KL constraint. Current LFGPO uses epsilon 0.2 and no direct new/old
+   policy KL constraint. A joint chunk ratio generally needs stricter control as
+   chunk length grows.
+3. ReinFlow's critic is observation-only (a value function). Current LFGPO must
+   rank high-dimensional full chunks with Q(s, action_chunk) under sparse reward;
+   measured group-Q spread is very small, so normalized advantages can amplify
+   ranking noise.
+4. ReinFlow collects reward at each executed action and accumulates it for the
+   chunk update. Current LFGPO stores the wrapper-aggregated reward and applies a
+   single-step TD bootstrap; verify discounted within-chunk reward semantics.
+
+Add the following one-factor tests before abandoning horizon 4:
+
+- joint-ratio clip epsilon in {0.001, 0.01, 0.05};
+- factorized per-position log-ratio with summed or horizon-normalized aggregation;
+- explicit ratio/KL early stopping or trust-region penalty;
+- observation-value advantage versus full-chunk Q advantage;
+- chunk-aware reward and `gamma ** act_steps` bootstrap.
+
+Recent work on action-chunked Flow/VLA policies primarily reports chunk-boundary
+discontinuity, multimodal switching, and asynchronous-execution mismatch, and
+uses continuation conditioning or trust-region guidance. This supports tracking
+boundary action jumps, but does not by itself explain the present training-time
+success collapse.
