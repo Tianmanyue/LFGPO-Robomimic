@@ -38,13 +38,17 @@ for TARGET_EPOCH in $(seq $((START_EPOCH + 25)) 25 500); do
   RESUME_OVERRIDE=()
   if [[ -n "${CURRENT_CKPT}" ]]; then
     RESUME_OVERRIDE=("+base_policy_path=${CURRENT_CKPT}")
+    TRAIN_EPOCHS=$((TARGET_EPOCH - START_EPOCH))
+  else
+    # A scratch run includes epoch zero, so state_25 needs 26 loop epochs.
+    TRAIN_EPOCHS=$((TARGET_EPOCH + 1))
   fi
   srun python script/run.py \
     --config-dir=cfg/robomimic/pretrain/transport \
     --config-name=pre_reflow_mlp \
     "name=transport_pre_reflow_continue_e${TARGET_EPOCH}" \
     "${RESUME_OVERRIDE[@]}" \
-    train.n_epochs=26 train.save_model_freq=25 \
+    "train.n_epochs=${TRAIN_EPOCHS}" train.save_model_freq=25 \
     device=cuda:0 wandb=null
 
   NEXT_CKPT=$(find runtime/log/robomimic/pretrain/transport_pre_reflow_mlp_ta8_td100 \
@@ -55,6 +59,7 @@ for TARGET_EPOCH in $(seq $((START_EPOCH + 25)) 25 500); do
     echo "Failed to produce state_${TARGET_EPOCH}.pt" >&2; exit 1;
   }
   CURRENT_CKPT=${NEXT_CKPT}
+  START_EPOCH=${TARGET_EPOCH}
 
   echo "Evaluating Transport cumulative epoch ${TARGET_EPOCH}: ${CURRENT_CKPT}"
   srun python script/run.py \

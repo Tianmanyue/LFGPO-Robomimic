@@ -348,7 +348,8 @@ class PreTrainAgent:
                 loss_train.backward()
                 loss_train_epoch.append(loss_train.item())
                 if self.verbose_loss: 
-                    print(f"epoch: {epoch}/{self.first_epoch + self.n_epochs}={epoch/(self.n_epochs-self.first_epoch)*100:2.2f}%, steps: {step}, loss: {loss_train.item():3.4}", end="\r")
+                    epoch_progress = (epoch - self.first_epoch + 1) / self.n_epochs * 100
+                    print(f"epoch: {epoch}/{self.first_epoch + self.n_epochs - 1}={epoch_progress:2.2f}%, steps: {step}, loss: {loss_train.item():3.4}", end="\r")
 
                 self.optimizer.step()
                 if self.schedule_lr_each_grad_step:
