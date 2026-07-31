@@ -420,3 +420,24 @@ All three checkpoints expose a 32-dimensional time embedding. Finetune configs m
 - p32827 shard: 8311934–8311945. It contains D1/D3/D5/D7/D9/D11 for each task and was accepted Pending with reason None.
 - D0–D11 test, respectively: reference, fixed sigma .1, adaptive alpha-init1, no TD noise, no GRPO noise, neither noise, chunk entropy dimension, original PPO advantage, 25% positive replay, ReinFlow-like tight trust/recent replay, gamma^4 bootstrap, and actor update frequency 8.
 - Code, launcher, matrix, and decision rules are pushed to `quest-two-account-launchers` at commit `ce82d3e`.
+
+### 2026-07-30 — conservative actor-timescale follow-up
+
+- All 24 adapter diagnostics completed normally. Noise path, chunk entropy,
+  PPO advantage, positive replay, and gamma^4 alone still collapse. D11 is the
+  only clear improvement: policy frequency 8 finishes at 37.93% on Can and
+  34.48% on Square, versus reference finals 15.50% and 15.50%.
+- Ratio-weight ESS remains 0.994–0.999, so actor weighting is nearly uniform.
+  The weighted velocity loss itself has the same horizon/action-dimension mean
+  reduction as Flow BC; no broadcasting or missing-normalization error was
+  found. The remaining mismatch is that ReinFlow constrains the policy directly
+  with clip/KL, while LFGPO's PPO clip constrains the ratio network rather than
+  the actor velocity field.
+- Added direct diagnostics for actor gradient norm and MSE drift from the frozen
+  initial BC velocity field.
+- Submitted 16 follow-ups for Can/Square, 121 itr, warmup20, eval5. They target
+  approximately 1/0.5/0.25 actor updates per iteration, actor LR 1e-5/5e-6,
+  and BC anchors 0/0.1/1.0.
+- p32948 jobs: 8397047, 8397048, 8397082–8397087. p32827 jobs:
+  8397184–8397186 and 8397196–8397200. All were accepted; p32948 reports
+  Pending/Priority and p32827 initially Pending/None.

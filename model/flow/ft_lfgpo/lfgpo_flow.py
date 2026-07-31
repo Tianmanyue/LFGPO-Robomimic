@@ -49,6 +49,7 @@ class LFGPOFlow(ReFlow):
         max_ratio_weight=5.0,
         ratio_reg_lambda=0.01,
         bc_anchor_coef=0.0,
+        track_base_actor_drift=False,
         sampling_noise_std=0.0,
         adaptive_sampling_noise=False,
         noise_scale=0.1,
@@ -93,6 +94,7 @@ class LFGPOFlow(ReFlow):
         self.max_ratio_weight = max_ratio_weight
         self.ratio_reg_lambda = ratio_reg_lambda
         self.bc_anchor_coef = bc_anchor_coef
+        self.track_base_actor_drift = track_base_actor_drift
         self.sampling_noise_std = sampling_noise_std
         self.adaptive_sampling_noise = adaptive_sampling_noise
         self.noise_scale = noise_scale
@@ -121,7 +123,7 @@ class LFGPOFlow(ReFlow):
             self.target_actor = copy.deepcopy(self.network).to(device)
         # Optional fixed reference that prevents long sparse-reward runs from
         # drifting too far from the pretrained flow policy.
-        if self.bc_anchor_coef > 0:
+        if self.bc_anchor_coef > 0 or self.track_base_actor_drift:
             self.base_actor = copy.deepcopy(self.network).to(device).eval()
             self.base_actor.requires_grad_(False)
 
@@ -275,10 +277,13 @@ class LFGPOFlow(ReFlow):
         v_hat = self.network(xt, t, obs)
         per_sample = F.mse_loss(v_hat, v, reduction="none").mean(dim=list(range(1, v.dim())))  # (B,)
         loss = (weight * per_sample).mean()
-        if self.bc_anchor_coef > 0:
+        if self.bc_anchor_coef > 0 or self.track_base_actor_drift:
             with torch.no_grad():
                 v_base = self.base_actor(xt, t, obs)
-            loss = loss + self.bc_anchor_coef * F.mse_loss(v_hat, v_base)
+            base_drift = F.mse_loss(v_hat, v_base)
+            self.last_diagnostics["base_actor_drift"] = float(base_drift.detach())
+            if self.bc_anchor_coef > 0:
+                loss = loss + self.bc_anchor_coef * base_drift
         self.last_diagnostics["noise_std"] = float(
             self.noise_scale * self.log_alpha.detach().exp()
             if self.adaptive_sampling_noise else self.sampling_noise_std

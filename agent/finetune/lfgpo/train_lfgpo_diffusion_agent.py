@@ -267,10 +267,13 @@ class TrainLFGPODiffusionAgent(TrainAgent):
                             loss_actor = self.model.loss_actor(obs_b, actions_b)
                             self.actor_optimizer.zero_grad()
                             loss_actor.backward()
-                            if self.max_grad_norm is not None:
-                                torch.nn.utils.clip_grad_norm_(
-                                    self.model.actor.parameters(), self.max_grad_norm
-                                )
+                            actor_grad_norm = torch.nn.utils.clip_grad_norm_(
+                                self.model.actor.parameters(),
+                                self.max_grad_norm if self.max_grad_norm is not None else float("inf"),
+                            )
+                            self.model.last_diagnostics["actor_grad_norm"] = float(
+                                actor_grad_norm.detach()
+                            )
                             self.actor_optimizer.step()
 
                     # 5. Polyak target updates
