@@ -455,3 +455,16 @@ All three checkpoints expose a 32-dimensional time embedding. Finetune configs m
   0.0703 versus 0.0044 for u0.25 and 0.0045 for anchor1.
 - This is direct evidence that cumulative actor velocity-field drift, not
   numerical loss scaling or ratio-weight concentration, drives collapse.
+
+### 2026-07-31 — reallocated pending actor jobs and added refinement sweep
+
+- Cancelled the eight never-started p32827 jobs 8397184–8397186 and
+  8397196–8397200. All show zero elapsed time and Cancelled state.
+- Resubmitted the same eight configurations on p32948 as 8416593–8416600.
+  Job 8416593 (`lfc_can_u05`) started first; the other seven were accepted
+  Pending/Priority.
+- Submitted 12 non-duplicate refinement jobs on p32827 as 8416862–8416864 and
+  8416868–8416876. For both Can and Square these test u0.125, u0.25+LR5e-6,
+  u0.25 with anchors 0.01/0.03/0.1, and u0.5+anchor0.03.
+- The refinement goal is to locate a low-drift setting that preserves enough
+  actor movement to improve over the BC start, rather than merely freezing it.
