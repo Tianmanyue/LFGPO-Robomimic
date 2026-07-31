@@ -441,3 +441,17 @@ All three checkpoints expose a 32-dimensional time embedding. Finetune configs m
 - p32948 jobs: 8397047, 8397048, 8397082–8397087. p32827 jobs:
   8397184–8397186 and 8397196–8397200. All were accepted; p32948 reports
   Pending/Priority and p32827 initially Pending/None.
+
+### 2026-07-31 — first half of conservative actor sweep completed
+
+- Eight p32948 jobs completed; the eight p32827 complementary jobs remain
+  Pending/Priority.
+- Can finals/last-five means: u1 11.00/19.68%, u0.25 47.52/52.34%,
+  u0.5+LR5e-6 37.81/41.10%, u1+anchor1 50.74/51.80%.
+- Square finals/last-five means: u1 20.59/25.15%, u0.25 33.01/35.32%,
+  u0.5+LR5e-6 36.54/34.41%, u1+anchor1 33.65/36.51%.
+- The late frozen-BC velocity drift strongly tracks degradation. Can u1 drift
+  is 0.0608 versus 0.0095 for u0.25 and 0.0031 for anchor1. Square u1 is
+  0.0703 versus 0.0044 for u0.25 and 0.0045 for anchor1.
+- This is direct evidence that cumulative actor velocity-field drift, not
+  numerical loss scaling or ratio-weight concentration, drives collapse.
